@@ -1,25 +1,20 @@
-{% if execute %}
+{% if check.exists and check.match %}
 
-    {% if results.rows | length == 0 %}
-      {{ return({"exists": false, "match": false}) }}
-    {% endif %}
+    {# Policy exists with matching columns — apply directly, skip creation #}
+    {{ log("Policy '" ~ policy_name ~ "' already exists with matching columns. Applying directly.", info=true) }}
 
-    {# --- results.rows[0][0] is already a list like ['cola', 'colb'] --- #}
-    {% set existing_cols_sorted = results.rows[0][0] | map("upper") | sort | list %}
+    ALTER TABLE {{ policy_database }}.{{ policy_schema }}.{{ this.name }}
+      ADD ROW ACCESS POLICY {{ policy_database }}.{{ policy_schema }}.{{ policy_name }}
+      ON ({{ columns | join(", ") }});
 
-    {# --- Sort incoming column names --- #}
-    {% set expected_cols_sorted = columns | map("upper") | sort | list %}
+  {% elif not check.exists %}
 
-    {# --- Compare --- #}
-    {% if existing_cols_sorted == expected_cols_sorted %}
-      {{ return({"exists": true, "match": true}) }}
-    {% else %}
-      {{ exceptions.raise_compiler_error(
-        "Row access policy '" ~ policy_name ~ "' already exists but columns do not match.\n" ~
-        "Existing : " ~ existing_cols_sorted | join(", ") ~ "\n" ~
-        "Expected : " ~ expected_cols_sorted | join(", ") ~ "\n" ~
-        "Drop the policy manually and re-run, or align your columns definition."
-      ) }}
-    {% endif %}
+    {# Policy does not exist — create first, then apply #}
+    {{ log("Policy '" ~ policy_name ~ "' not found. Creating...", info=true) }}
 
-{% endif %}
+    {{ create_row_access_policy(
+        policy_name     = policy_name,
+        policy_database = policy_database,
+        policy_schema   = policy_schema,
+        columns         = columns
+    ) }}
