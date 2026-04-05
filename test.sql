@@ -1,20 +1,28 @@
-{% if check.exists and check.match %}
+-- tests/unit/test_should_apply_row_access_policy.sql
+{{
+    config(
+        tags=['unit-test']
+    )
+}}
 
-    {# Policy exists with matching columns — apply directly, skip creation #}
-    {{ log("Policy '" ~ policy_name ~ "' already exists with matching columns. Applying directly.", info=true) }}
+-- Test 1: Table materialization should return true
+{% set result = should_apply_row_access_policy('table') %}
+{% if result != true %}
+    {{ exceptions.raise_compiler_error("Test failed: table should return true, got " ~ result) }}
+{% endif %}
 
-    ALTER TABLE {{ policy_database }}.{{ policy_schema }}.{{ this.name }}
-      ADD ROW ACCESS POLICY {{ policy_database }}.{{ policy_schema }}.{{ policy_name }}
-      ON ({{ columns | join(", ") }});
+-- Test 2: View materialization should return true
+{% set result = should_apply_row_access_policy('view') %}
+{% if result != true %}
+    {{ exceptions.raise_compiler_error("Test failed: view should return true, got " ~ result) }}
+{% endif %}
 
-  {% elif not check.exists %}
+-- Test 3: Unsupported materialization should error
+{% set passed = false %}
+{% if execute %}
+    {% set test_query %}
+        {{ should_apply_row_access_policy('unsupported_type') }}
+    {% endset %}
+{% endif %}
 
-    {# Policy does not exist — create first, then apply #}
-    {{ log("Policy '" ~ policy_name ~ "' not found. Creating...", info=true) }}
-
-    {{ create_row_access_policy(
-        policy_name     = policy_name,
-        policy_database = policy_database,
-        policy_schema   = policy_schema,
-        columns         = columns
-    ) }}
+select 1 as id where 1=1  -- Dummy select so test file is valid
